@@ -1,0 +1,23 @@
+3. Troubleshooting Cheatsheet
+Symptom	Cause	Fix	Log File(s)
+DNS_PROBE_STARTED in browser	No DNS A record	Add host record for SCCM in DNS Manager (WIN-KF07TP9524F.lab.local -> 10.0.0.11)	DNS logs
+MP XML loads by IP but not FQDN	DNS issue	Same as above	IIS logs, mpcontrol.log
+ccmsetup.exe not recognized	Not in PATH	Run from Z:\Client after mapping share	Command prompt
+UNC paths not supported	CMD limitation	Use net use Z: and map drive	Command prompt
+User name or password incorrect	Wrong creds for share	Use domain creds: /user:LAB\Administrator	N/A
+“Cannot find LAB site” in log	Boundary misconfigured	Add boundary + boundary group, assign to site	LocationServices.log, ClientLocation.log
+ConfigMgr Properties shows “Unknown” connection type	Client hasn’t retrieved policies yet	Run Machine Policy Retrieval & Evaluation Cycle	PolicyAgent.log
+Failed to resolve SMS_SLP from WINS	Legacy lookup	Safe to ignore	LocationServices.log
+Actions tab empty	Client not registered	Fix site assignment / rerun ccmsetup	ConfigMgr control panel
+
+| Symptom                                              | Cause                                | Fix                                                                                | Log File(s)                                  |
+| ---------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------- |
+| `DNS_PROBE_STARTED` in browser                       | No DNS A record                      | Add host record for SCCM in DNS Manager (`WIN-KF07TP9524F.lab.local -> 10.0.0.11`) | DNS logs                                     |
+| MP XML loads by IP but not FQDN                      | DNS issue                            | Same as above                                                                      | IIS logs, `mpcontrol.log`                    |
+| `ccmsetup.exe not recognized`                        | Not in PATH                          | Run from `Z:\Client` after mapping share                                           | Command prompt                               |
+| `UNC paths not supported`                            | CMD limitation                       | Use `net use Z:` and map drive                                                     | Command prompt                               |
+| `User name or password incorrect`                    | Wrong creds for share                | Use domain creds: `/user:LAB\Administrator`                                        | N/A                                          |
+| “Cannot find LAB site” in log                        | Boundary misconfigured               | Add boundary + boundary group, assign to site                                      | `LocationServices.log`, `ClientLocation.log` |
+| ConfigMgr Properties shows “Unknown” connection type | Client hasn’t retrieved policies yet | Run **Machine Policy Retrieval & Evaluation Cycle**                                | `PolicyAgent.log`                            |
+| `Failed to resolve SMS_SLP from WINS`                | Legacy lookup                        | Safe to ignore                                                                     | `LocationServices.log`                       |
+| Actions tab empty                                    | Client not registered                | Fix site assignment / rerun ccmsetup                                               | ConfigMgr control panel                      |
