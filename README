@@ -280,3 +280,70 @@ C:\Windows\CCM\Logs\PolicyAgent.log
 C:\Windows\CCM\Logs\PolicyEvaluator.log
 C:\Windows\CCM\Logs\ClientIDManagerStartup.log
 C:\Windows\CCM\Logs\ExecMgr.log
+
+
+What I’d Do Next (Roadmap)
+
+SUP/WSUS: add Software Update Point & baseline patch compliance.
+
+Application deployment: deploy a test MSI to a collection.
+
+Hardware/Software inventory: verify DDRs/inventory data in Resource Explorer.
+
+Move to HTTPS (PKI) or eHTTPS for real security.
+
+Cloud attach: consider CMG if you want to demo internet clients later.
+
+One-Page Timeline (Troubleshooting Diary)
+
+Initial SCCM install with MP over HTTP.
+
+Client fails FQDN browse ➜ DNS A record missing ➜ add record ➜ nslookup good.
+
+IIS/MP check (mplist) succeeds by IP then by FQDN.
+
+Boundary created (IP range 10.0.0.1–10.0.0.254) ➜ Boundary Group made.
+
+Boundary Group references added ➜ site assignment LAB + site system server \\WIN-KF07TP9524F.lab.local.
+
+Client install attempts:
+
+From MP with /mp + SMSSITECODE (works).
+
+From site share: hit UNC and auth errors ➜ mapped creds + drive ➜ success.
+
+Service bounces (ccmexec) + Machine Policy Retrieval run.
+
+Logs confirm intranet, site assignment, policy flow.
+
+Control Panel shows Assigned MP, SMS:LAB, full actions.
+
+Console shows client healthy under Assets and Compliance.
+
+Screens You Should Include (with your existing captures)
+
+DNS A-record for WIN-KF07TP9524F.lab.local → 10.0.0.11
+
+http://win-kf07tp9524f.lab.local/SMS_MP/.sms_aut?mplist (XML with SSLState=0)
+
+Boundary and Boundary Group (References tab with the site system server)
+
+MP properties set to HTTP
+
+Client’s Configuration Manager Properties → General (Assigned MP + SMS:LAB)
+
+Client’s Actions tab (full list)
+
+Device visible in console with Client = Yes
+
+Final Status
+
+✅ MP reachable and responding over HTTP
+
+✅ DNS fixed and consistent
+
+✅ Boundaries & boundary group reference configured correctly
+
+✅ Client installed (from MP and from share), assigned to LAB
+
+✅ Policies retrievable on demand; full client actions visible
