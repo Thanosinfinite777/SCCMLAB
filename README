@@ -1,0 +1,282 @@
+Building & Troubleshooting an SCCM (MECM) Lab — End-to-End
+
+Goal: Stand up a working Microsoft Configuration Manager (SCCM/MECM) lab, get a Windows client fully managed, and document every fix along the way (DNS, IIS/MP health, boundaries, client install, policy flow).
+Outcome: Client is assigned to site LAB, can talk to the MP, shows full actions in the ConfigMgr control panel, and pulls policy on demand.
+
+Lab Topology
+
+AD Domain: lab.local
+Site code: LAB (Primary Site)
+IP space: 10.0.0.0/24
+
+Role	Hostname (seen)	IP	Notes
+Domain Controller + DNS + DHCP	WIN-SEC6ESOS15U	10.0.0.10	DNS zone lab.local, DHCP leases for clients
+SCCM Site Server (MP/DP)	WIN-KF07TP9524F.lab.local (aka EM01)	10.0.0.11	Site server for LAB, MP over HTTP
+Windows 11 Client	e.g., WIN11-CL01	10.0.0.101 (DHCP)	Managed client
+(Optional) Another client	BN01	DHCP	Used during troubleshooting
+
+We purposely ran the MP in HTTP (lab-friendly), validated IIS endpoints, and locked everything to the intranet.
+
+What I Built (High-Level)
+
+Core services: AD DS, DNS, DHCP.
+
+SCCM Primary Site (LAB) on WIN-KF07TP9524F.lab.local with the Management Point (MP) running HTTP.
+
+Boundaries & Boundary Group for 10.0.0.0/24, with site assignment and the site system server referenced.
+
+IIS/MP health checks via the mplist endpoint.
+
+Client installation both direct from MP and from the site share (\\Server\SMS_LAB\Client), including credential mapping and command-line switches.
+
+Client health & policy verification using the ConfigMgr control panel and client logs.
+
+Networking & Name Resolution
+Symptom
+
+From the client, browsing http://win-kf07tp9524f.lab.local/SMS_MP/.sms_aut?mplist failed: “DNS address could not be found” (DNS_PROBE_STARTED).
+
+Root-Cause
+
+The A record for the SCCM site server didn’t exist (or wasn’t resolvable from the client yet).
+
+Fix
+
+Created the A record in DNS:
+
+Name: WIN-KF07TP9524F
+
+FQDN: WIN-KF07TP9524F.lab.local
+
+IP: 10.0.0.11
+
+On the client:
+
+ipconfig /flushdns
+ipconfig /registerdns
+
+
+Verified resolution:
+
+nslookup win-kf07tp9524f.lab.local
+
+
+Output showed Address: 10.0.0.11 ✅
+
+Validated HTTP mplist (from the client and server):
+
+http://10.0.0.11/SMS_MP/.sms_aut?mplist
+
+http://win-kf07tp9524f.lab.local/SMS_MP/.sms_aut?mplist
+
+Both returned XML with:
+
+<Property Name="SSLState" Value="0"/>   <!-- 0 = HTTP -->
+
+
+Lesson: SCCM clients live and die by DNS. Always verify FQDN resolution before chasing SCCM logs.
+
+SCCM Site & Role Configuration
+Site Properties
+
+Site Code: LAB
+
+Site Server: WIN-KF07TP9524F.lab.local
+
+Version: 5.00.9128.1000
+
+MP: HTTP (intranet)
+
+Management Point (MP)
+
+Client connections: HTTP selected (lab scenario).
+
+MP URL validated via mplist as shown above.
+
+Boundary & Boundary Group
+
+Boundary: 10.0.0.1 – 10.0.0.254 (Type: IP address range)
+
+Boundary Group: LAB Boundary Group
+
+References ➜ Site assignment: LAB - Lab Primary Site
+
+References ➜ Site system servers: \\WIN-KF07TP9524F.lab.local
+(This makes the MP/DP discoverable for policy & content.)
+
+Common gotcha we fixed: The boundary group initially didn’t reference the site system, so the client could not learn about the MP/DP for content/policy. Adding the site system fixed location awareness.
+
+IIS / MP Health Check
+
+Objective: Prove MP is alive and serving policy endpoints.
+
+On EM01 (site server) and client:
+
+http://localhost/SMS_MP/.sms_aut?mplist ✅
+
+http://win-kf07tp9524f.lab.local/SMS_MP/.sms_aut?mplist ✅
+
+http://10.0.0.11/SMS_MP/.sms_aut?mplist ✅
+
+XML showed:
+
+<MP Name="WIN-KF07TP9524F.LAB.LOCAL" FQDN="WIN-KF07TP9524F.lab.local">
+  <Property Name="SSLState" Value="0"/>
+</MP>
+
+
+Why this matters: If mplist works, the MP, IIS, and the SCCM app pools are basically doing their job. If it fails, fix that before touching anything client-side.
+
+Client Installation — What Worked & Why
+
+We used two approaches.
+
+1) Direct from MP (simplest)
+C:\Windows\ccmsetup\ccmsetup.exe /mp:WIN-KF07TP9524F.lab.local SMSSITECODE=LAB
+
+
+Notes:
+
+/mp: points the bootstrapper at the MP so it can download the client.
+
+SMSSITECODE=LAB pre-assigns the site (optional if site assignment via boundary group is solid, but helpful for lab speed).
+
+2) Install from the site share (when UNC paths/credentials matter)
+
+Problem we hit:
+
+ccmsetup.exe “not recognized” or UNC path errors:
+
+CMD does not support UNC paths as current directories.
+
+The user name or password is incorrect. (when trying to pull from admin share)
+
+Fix: Map credentials and a drive letter, then run local:
+
+:: Provide domain creds to access the site share
+net use \\WIN-KF07TP9524F\SMS_LAB /user:LAB\Administrator
+
+:: Map a drive so we’re not executing from a UNC path
+net use Z: \\WIN-KF07TP9524F\SMS_LAB
+
+:: Run from the Client folder
+cd /d Z:\Client
+ccmsetup.exe /mp:WIN-KF07TP9524F.lab.local SMSSITECODE=LAB
+
+
+Service resets we used often:
+
+net stop ccmexec
+net start ccmexec
+
+
+When repairing an existing client:
+
+# PowerShell WMI repair
+Invoke-CimMethod -Namespace root\ccm -ClassName SMS_Client -MethodName RepairClient
+
+Key Logs & What We Looked For
+
+Log path on client: C:\Windows\CCM\Logs\
+
+Log	Why we read it	What success looks like
+ccmsetup.log	Bootstrap/install flow	CcmSetup is exiting with return code 0
+ClientLocation.log	Intranet/extranet, site assignment	Domain joined client is in Intranet & site selection
+LocationServices.log	MP/DP discovery & fallback	MP found, DP list populated
+PolicyAgent.log	Policies downloaded	New policy assignments after Machine Policy cycle
+PolicyEvaluator.log	Policies evaluated/applied	Evaluation completes w/o errors
+ClientIDManagerStartup.log	Client GUID / registration	Successful registration with MP
+ExecMgr.log	Program/app execution	For deployments later
+
+We also saw harmless legacy messages like “Failed to resolve 'SMS_SLP' from WINS” — not used in modern SCCM, so safe to ignore.
+
+Validation — Proving the Client Is Managed
+Control Panel ➜ Configuration Manager
+
+General tab showed:
+
+Assigned management point: WIN-KF07TP9524F.lab.local
+
+Site code: SMS:LAB
+
+Version: 5.00.9128.1007
+
+(Later) Connection Type: “Currently intranet” / “Unknown” during first minutes is normal
+
+Actions tab: (appears fully once client registers)
+
+Application Deployment Evaluation Cycle
+
+Discovery Data Collection Cycle
+
+Hardware Inventory Cycle
+
+Machine Policy Retrieval & Evaluation Cycle, etc.
+
+We manually forced policy:
+
+Select Machine Policy Retrieval & Evaluation Cycle ➜ Run Now
+
+Watched PolicyAgent.log for incoming policies.
+
+In the SCCM Console (EM01)
+
+Assets and Compliance > Devices ➜ the client shows Client = Yes and Site Code = LAB once discovery cycles complete.
+
+Issues We Hit (and Fixed)
+Symptom	Cause	Fix
+FQDN to MP won’t resolve; Edge shows DNS error	Missing A record	Created A record, flushed/registered DNS
+ccmsetup.exe not recognized	Not in current folder/UNC execution	Map drive to \\Server\SMS_LAB, run from Z:\Client
+“CMD does not support UNC paths as current directories.”	Trying to run directly from UNC	net use Z: \\Server\SMS_LAB then cd /d Z:\Client
+“The user name or password is incorrect.”	No/domain creds for share	net use \\Server\SMS_LAB /user:LAB\Administrator
+Client showed actions missing / couldn’t find site	Boundary group didn’t reference site system	Added site system server under Boundary Group ➜ References
+Security / Transport Decision (Lab)
+
+MP over HTTP to keep the lab simple (SSLState Value="0").
+
+For production, move to HTTPS with PKI or switch to eHTTPS.
+
+“Why This Matters” (What This Demonstrates)
+
+Core IT fundamentals: DNS, DHCP, AD, IIS, certificates (design choices), service control, Windows networking.
+
+SCCM internals: Roles (MP/DP), boundary design, client assignment, policy flow, key logs.
+
+Troubleshooting under pressure: You hit real-world SCCM issues (DNS, boundary references, UNC auth), diagnosed them quickly, and validated each fix with concrete tests (nslookup, mplist, log lines, control panel actions).
+
+Operational readiness: You know exactly where to look when a client won’t register or won’t receive policy.
+
+Commands — Quick Reference
+:: DNS/Client refresh
+ipconfig /flushdns
+ipconfig /registerdns
+
+:: SCCM agent service
+net stop ccmexec
+net start ccmexec
+
+:: Install from MP
+C:\Windows\ccmsetup\ccmsetup.exe /mp:WIN-KF07TP9524F.lab.local SMSSITECODE=LAB
+
+:: Install from site share with domain creds
+net use \\WIN-KF07TP9524F\SMS_LAB /user:LAB\Administrator
+net use Z: \\WIN-KF07TP9524F\SMS_LAB
+cd /d Z:\Client
+ccmsetup.exe /mp:WIN-KF07TP9524F.lab.local SMSSITECODE=LAB
+
+
+Useful URLs
+
+MP health: http://<mp>/SMS_MP/.sms_aut?mplist
+
+Local test on server: http://localhost/SMS_MP/.sms_aut?mplist
+
+Key Client Logs
+
+C:\Windows\CCM\Logs\ccmsetup.log
+C:\Windows\CCM\Logs\ClientLocation.log
+C:\Windows\CCM\Logs\LocationServices.log
+C:\Windows\CCM\Logs\PolicyAgent.log
+C:\Windows\CCM\Logs\PolicyEvaluator.log
+C:\Windows\CCM\Logs\ClientIDManagerStartup.log
+C:\Windows\CCM\Logs\ExecMgr.log
