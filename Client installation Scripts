@@ -1,0 +1,16 @@
+Manual Client Install (mapped drive method)
+net use Z: \\WIN-KF07TP9524F\SMS_LAB\Client /user:LAB\Administrator P@ssw0rd
+cd Z:\
+
+ccmsetup.exe /mp:WIN-KF07TP9524F.lab.local SMSSITECODE=LAB
+
+Repair Client via PowerShell
+Invoke-CimMethod -Namespace root\ccm -ClassName SMS_Client -MethodName RepairClient
+
+Restart SMS Agent Host
+net stop ccmexec
+net start ccmexec
+
+Trigger Policy Updates
+Invoke-WmiMethod -Namespace root\ccm -Class CCM_ClientUtilities -Name TriggerSchedule `
+-ArgumentList "{00000000-0000-0000-0000-000000000021}"  # Machine Policy Retrieval & Eval
