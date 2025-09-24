@@ -1,0 +1,59 @@
+# Install ADDS, DNS, DHCP
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+Install-WindowsFeature DNS -IncludeManagementTools
+Install-WindowsFeature DHCP -IncludeManagementTools
+
+# Promote server to domain controller
+Install-ADDSForest -DomainName "lab.local" -DomainNetbiosName "LAB" -InstallDNS
+
+# Create DHCP scope (10.0.0.0/24)
+Add-DhcpServerv4Scope -Name "Lab Scope" -StartRange 10.0.0.100 -EndRange 10.0.0.200 -SubnetMask 255.255.255.0 -State Active
+Set-DhcpServerv4OptionValue -DnsServer 10.0.0.10 -Router 10.0.0.1
+
+
+SQL Server Setup
+
+During SQL installer:
+
+Select Database Engine Services
+
+Select Reporting Services – Native
+
+Install SQL Management Studio separately.
+
+After install:
+
+-- Check collation
+SELECT SERVERPROPERTY('Collation');
+
+-- Add SCCM service account as sysadmin
+USE [master];
+CREATE LOGIN [LAB\sccmadmin] FROM WINDOWS;
+ALTER SERVER ROLE sysadmin ADD MEMBER [LAB\sccmadmin];
+
+WSUS Setup
+Install-WindowsFeature UpdateServices, UpdateServices-DB, UpdateServices-RSAT -IncludeManagementTools
+# Run WSUS post-install
+wsusutil.exe postinstall SQL_INSTANCE_NAME="WIN-KF07TP9524F\SQLEXPRESS" CONTENT_DIR=D:\WSUS
+
+IIS Setup
+Install-WindowsFeature Web-Server, Web-WebServer, Web-Common-Http, Web-Default-Doc, `
+Web-Dir-Browsing, Web-Http-Errors, Web-Static-Content, Web-Http-Redirect, `
+Web-Health, Web-Http-Logging, Web-Log-Libraries, Web-Request-Monitor, `
+Web-Http-Tracing, Web-Performance, Web-Stat-Compression, Web-Dyn-Compression, `
+Web-Security, Web-Filtering, Web-Basic-Auth, Web-Windows-Auth, `
+Web-App-Dev, Web-Net-Ext, Web-Net-Ext45, Web-ASP, Web-Asp-Net, Web-Asp-Net45, `
+Web-CGI, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Mgmt-Console, Web-Scripting-Tools, `
+Web-Mgmt-Compat, Web-Metabase, Web-WMI -IncludeManagementTools
+
+SCCM Install
+
+Run Splash.hta from SCCM media.
+
+Choose Primary Site.
+
+Site Code: LAB.
+
+Database: CM_LAB on SQL instance.
+
+Install roles: MP, DP.
