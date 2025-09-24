@@ -1,0 +1,31 @@
+1. Purpose of WSUS in SCCM
+
+Acts as the update catalog that SCCM’s Software Update Point (SUP) syncs with.
+
+Provides update metadata (titles, descriptions, categories, required files).
+
+SCCM then uses its own agent/policies to decide which clients need which updates.
+
+2. Steps We Did
+
+Installed the WSUS Server Role on EM01.
+
+Pointed WSUS to use the SQL Server instance (not WID).
+
+Chose to only download metadata, not updates (since we wanted “minimum footprint” in the lab).
+
+Integrated WSUS into SCCM by adding the Software Update Point role.
+
+Selected Windows 10/11 and Server 2022 products + English language only.
+
+3. Validation
+
+Checked wsyncmgr.log on EM01 to confirm sync was happening.
+
+Verified SUP role showed as installed and healthy in the SCCM console.
+
+4. Why This Matters in IT Support
+
+Real companies depend on SCCM to patch workstations and servers.
+
+Understanding SUP + WSUS means you can troubleshoot update compliance issues, which is a day-to-day help desk escalation.
