@@ -1,0 +1,211 @@
+Full SCCM/MECM Lab Build — Every Step & Fix
+
+This repo documents the entire journey of building SCCM/MECM in a home lab — not just the client-side, but the infrastructure pieces that made it work: WSUS, SQL Server, SSRS, IIS, DNS, DHCP, Boundaries, and all the client troubleshooting we did later.
+
+Infrastructure Setup (Before SCCM Could Even Run)
+Active Directory + Networking
+
+Built a new AD forest/domain: lab.local.
+
+DC (WIN-SEC6ESOS15U) handled:
+
+DNS (forward lookup zone lab.local)
+
+DHCP (10.0.0.0/24 scope)
+
+Verified AD/DNS health (dcdiag, nslookup).
+
+SQL Server Setup (SCCM Dependency)
+
+Installed SQL Server 2019 on the SCCM site server (WIN-KF07TP9524F).
+
+Features installed:
+
+Database Engine Services
+
+Reporting Services Native
+
+SQL Management Studio
+
+Configured SQL memory limits (so SCCM has enough resources).
+
+Enabled SQL TCP/IP protocols.
+
+Created the SCCM DB during site install:
+
+DB name auto-generated as CM_LAB
+
+Verified collation SQL_Latin1_General_CP1_CI_AS (required for SCCM).
+
+Confirmed SCCM server had sysadmin rights in SQL.
+
+SSRS (SQL Server Reporting Services)
+
+Installed SSRS as part of SQL feature set.
+
+Opened Reporting Services Configuration Manager:
+
+Configured Web Service URL
+
+Configured Report Manager URL
+
+Later, integrated into SCCM as the Reporting Services Point role (not yet heavily used, but core to showing you understand reporting).
+
+WSUS Setup (for SUP role)
+
+Installed Windows Server Update Services role on the site server.
+
+WSUS configured in “upstream Microsoft” mode.
+
+Did the post-install WSUS setup wizard.
+
+Left WSUS DB integrated with SCCM’s SQL instance.
+
+This laid the groundwork for adding the Software Update Point (SUP) role in SCCM (though we focused on core MP/DP/client first).
+
+IIS Role & Configuration
+
+SCCM relies heavily on IIS. Installed IIS with:
+
+Web Server
+
+ASP.NET, .NET Extensibility
+
+ISAPI Filters & Extensions
+
+IIS 6 Metabase Compatibility
+
+BITS + IIS WebDAV
+
+Verified MP virtual directories:
+
+/SMS_MP/.sms_aut?mplist
+
+/CCM_Incoming
+
+/CCM_Client
+
+SCCM Installation (Primary Site LAB)
+
+Ran SCCM setup wizard.
+
+Selected Primary Site.
+
+Integrated with existing SQL instance.
+
+Configured site code: LAB.
+
+Installed roles:
+
+Management Point (HTTP)
+
+Distribution Point
+
+Verified installation logs (ConfigMgrSetup.log, MPSetup.log, MPMSI.log).
+
+SCCM Configuration (Post-Install)
+Boundaries
+
+Boundary: 10.0.0.1 – 10.0.0.254.
+
+Boundary Group: LAB Boundary Group.
+
+Set site assignment: LAB Primary Site.
+
+Added site system server reference: \\WIN-KF07TP9524F.lab.local.
+
+Client Settings
+
+Confirmed default client settings were deployed to all systems.
+
+Configured client installation method:
+
+Client Push Installation enabled with LAB\Administrator.
+
+Client-Side Build & Troubleshooting
+
+We already detailed this in your earlier README draft, but let me tie it together:
+
+DNS issue → fixed with A record.
+
+HTTP MP health validated via mplist.
+
+Boundary missing references → added site system.
+
+Client install issues:
+
+ccmsetup.exe not recognized → mapped share to Z: drive.
+
+UNC path not supported → switched to mapped drive.
+
+user/password incorrect → used net use with domain creds.
+
+Final working command:
+
+ccmsetup.exe /mp:WIN-KF07TP9524F.lab.local SMSSITECODE=LAB
+
+
+Service restarts (net stop ccmexec / net start ccmexec).
+
+Repair method using PowerShell CIM:
+
+Invoke-CimMethod -Namespace root\ccm -ClassName SMS_Client -MethodName RepairClient
+
+
+Logs reviewed: ccmsetup.log, ClientLocation.log, LocationServices.log, PolicyAgent.log, etc.
+
+Success validation:
+
+ConfigMgr properties showed Assigned MP + Site Code = SMS:LAB.
+
+Actions tab populated with full set of cycles.
+
+Manual Machine Policy Retrieval & Evaluation Cycle pulled new policies.
+
+Errors We Documented (and Fixed)
+
+DNS resolution failures (DNS_PROBE_STARTED).
+
+SCCM client not finding site (Cannot find "LAB site" in logs).
+
+MP check returning by IP but not FQDN.
+
+Client push failing because of boundary group misconfig.
+
+CMD does not support UNC paths when running ccmsetup.
+
+Wrong credentials for accessing \\Server\SMS_LAB\Client.
+
+“Failed to resolve SMS_SLP from WINS” (harmless legacy).
+
+ConfigMgr General tab initially showed Unknown connection type (expected until policy sync completed).
+
+Proof of Completion
+
+Client registered with site code LAB.
+
+MP validated over HTTP (mplist returns correct XML).
+
+ConfigMgr General tab shows:
+
+Assigned MP
+
+Site code SMS:LAB
+
+ConfigMgr Actions tab shows all cycles.
+
+Boundary + Boundary Group correctly tied to site system server.
+
+SCCM console shows device with Client = Yes.
+
+Why This Project Shows Value (Help Desk / Support Specialist)
+
+Breadth: You covered AD, DNS, DHCP, SQL, WSUS, IIS, SCCM, client deployment — end-to-end enterprise stack.
+
+Depth: Debugged DNS, IIS endpoints, UNC/credential issues, site assignment, log-driven troubleshooting.
+
+Hands-on skill: You actually built and fixed SCCM, not just “read about it.”
+
+Relevance: Skills map directly to real Help Desk / Support roles (SCCM client installs, policy refresh, software distribution, patching).
+
+Persistence: You hit dozens of real-world errors and pushed through each one systematically.
